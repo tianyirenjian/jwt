@@ -9,5 +9,11 @@
             "email": "179063828@qq.com"
         }
     ],
-    "require": {}
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "Goenitz\\JWT\\": "src/"
+        }
+    },
+    "minimum-stability": "dev"
 }
