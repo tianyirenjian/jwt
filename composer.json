@@ -1,0 +1,13 @@
+{
+    "name": "goenitz/jwt",
+    "description": "A library to encode and decode JSON Web Tokens in PHP",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "goenitz",
+            "email": "179063828@qq.com"
+        }
+    ],
+    "require": {}
+}
