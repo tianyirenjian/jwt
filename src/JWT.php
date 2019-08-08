@@ -34,9 +34,7 @@ class JWT {
 
     private function sign($data, $key, $alg = 'HS256')
     {
-        if (!array_key_exists($alg, $this->algs)) {
-            // TODO throw exception
-        }
+        $this->determineSupportAlgorithm($alg);
         list($function, $algorithm) = $this->algs[$alg];
         if ($function == 'hash_hmac') {
             return hash_hmac($algorithm, $data, $key, true);
@@ -45,21 +43,66 @@ class JWT {
             $signature = '';
             $success = openssl_sign($data, $signature, $key, $algorithm);
             if (!$success) {
-                // TODO throw exception
+                throw new JWTException('Openssl unable to sign data');
             } else {
                 return $signature;
             }
         }
-        // TODO throw exception
+    }
+
+    public function verify($jwt, $key, $alg = 'HS256')
+    {
+        $this->determineSupportAlgorithm($alg);
+
+        list($header, $payload, $signature) = explode('.', $jwt);
+        $deHeader = json_decode($this->base64Decode($header), true);
+        if (isset($deHeader['alg']) && $deHeader['alg'] != $alg) {
+            return false;
+        }
+        
+        list($function, $algorithm) = $this->algs[$alg];
+        if ($function == 'hash_hmac') {
+            return $signature == $this->base64Encode(hash_hmac($algorithm, "$header.$payload", $key, true));
+        }
+        if ($function == 'openssl') {
+            $success = openssl_verify("$header.$payload", $this->base64Decode($signature), $key, $algorithm);
+            // code below from https://github.com/firebase/php-jwt/blob/master/src/JWT.php
+            if ($success === 1) {
+                return true;
+            } elseif ($success === 0) {
+                return false;
+            }
+            // returns 1 on success, 0 on failure, -1 on error.
+            throw new JWTException(
+                'OpenSSL error: ' . openssl_error_string()
+            );
+        }
+        return false;
+    }
+
+    private function determineSupportAlgorithm($alg)
+    {
+        if (!array_key_exists($alg, $this->algs)) {
+            throw new JWTException('Algorithm not supported.');
+        }
     }
 
     private function base64Encode($data)
     {
-        $data = base64_encode($data);
-        return strtr($data, [
+        return strtr(base64_encode($data), [
             '=' => '',
             '+' => '-',
             '/' => '_',
         ]);
+    }
+
+    private function base64Decode($data)
+    {
+        $data = strtr($data, '-_', '+/');
+        $reminder = strlen($data) % 4;
+        if ($reminder) {
+            $data .= str_repeat('=', 4 - $reminder);
+        }
+        return base64_decode($data);
     }
 }
