@@ -2,8 +2,6 @@
 namespace Goenitz\JWT;
 
 class JWT {
-    private $jti = false;
-
     private $algs = [
         'HS256' => ['hash_hmac', 'SHA256'],
         'HS384' => ['hash_hmac', 'SHA384'],
@@ -12,14 +10,6 @@ class JWT {
         'RS384' => ['openssl', 'SHA384'],
         'RS512' => ['openssl', 'SHA512'],
     ];
-
-    /**
-     * @param $jti = false
-     */
-    public function __construct($jti = false)
-    {
-        $this->jti = false;
-    }
 
     public function encode($payload, $key, $alg = 'HS256')
     {
@@ -54,18 +44,29 @@ class JWT {
     {
         $this->determineSupportAlgorithm($alg);
 
-        list($header, $payload, $signature) = explode('.', $jwt);
-        $deHeader = json_decode($this->base64Decode($header), true);
-        if (isset($deHeader['alg']) && $deHeader['alg'] != $alg) {
+        $explodes = explode('.', $jwt);
+        if (count($explodes) != 3) {
+            throw new JWTException('Invalid token');
+        }
+
+        list($header64, $payload64, $signature64) = $explodes;
+        $header = json_decode($this->base64Decode($header64), true);
+        if (!isset($header['alg'])) {
+            throw new JWTException('Empty algorithm');
+        }
+        if (!isset($this->algs[$header['alg']])) {
+            throw new JWTException('Algorithm not supported');
+        }
+        if ($header['alg'] != $alg) {
             return false;
         }
         
         list($function, $algorithm) = $this->algs[$alg];
         if ($function == 'hash_hmac') {
-            return $signature == $this->base64Encode(hash_hmac($algorithm, "$header.$payload", $key, true));
+            return $signature64 == $this->base64Encode(hash_hmac($algorithm, "$header64.$payload64", $key, true));
         }
         if ($function == 'openssl') {
-            $success = openssl_verify("$header.$payload", $this->base64Decode($signature), $key, $algorithm);
+            $success = openssl_verify("$header64.$payload64", $this->base64Decode($signature64), $key, $algorithm);
             // code below from https://github.com/firebase/php-jwt/blob/master/src/JWT.php
             if ($success === 1) {
                 return true;
@@ -78,6 +79,15 @@ class JWT {
             );
         }
         return false;
+    }
+
+    public function decode($jwt, $key, $alg = 'HS256')
+    {
+        if ($this->verify($jwt, $key, $alg)) {
+            list(, $payload64, ) = explode('.', $jwt);
+            return json_decode($this->base64Decode($payload64));
+        }
+        throw new JWTException('Invalid token');
     }
 
     private function determineSupportAlgorithm($alg)
